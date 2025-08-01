@@ -6,7 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 
 import { RootStackParamList } from './types';
 import SearchScreen from './screens/SearchScreen';
-import PlaceListScreen from './screens/PlaceListScreen';
 import PlaceDetailsScreen from './screens/PlaceDetailsScreen';
 import ChatScreen from './screens/ChatScreen';
 
@@ -37,13 +36,6 @@ export default function App() {
               headerStyle: {
                 backgroundColor: '#6200ea',
               },
-            }}
-          />
-          <Stack.Screen 
-            name="PlaceList" 
-            component={PlaceListScreen}
-            options={{ 
-              title: 'Search Results',
             }}
           />
           <Stack.Screen 

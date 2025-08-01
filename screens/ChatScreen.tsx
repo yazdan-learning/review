@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, Button, Card, Paragraph, Title, Avatar } from 'react-native-paper';
+import { View, FlatList, StyleSheet, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { TextInput, Button, Card, Paragraph, Title, Avatar, IconButton } from 'react-native-paper';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
@@ -108,66 +108,54 @@ export default function ChatScreen({ navigation, route }: Props) {
     </View>
   );
 
-  const suggestedQuestions = [
-    "How's the food quality?",
-    "Is it good for romantic dinners?",
-    "How's the service?",
-    "Is it worth the price?",
-    "How's the parking situation?"
-  ];
+
 
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <View style={styles.header}>
-        <Title style={styles.headerTitle}>Chat about {place.name}</Title>
-        <Paragraph style={styles.headerSubtitle}>Ask me anything about this place!</Paragraph>
-      </View>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Title style={styles.headerTitle}>Chat about {place.name}</Title>
+            <Paragraph style={styles.headerSubtitle}>Ask me anything about this place!</Paragraph>
+          </View>
 
-      <FlatList
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        style={styles.messagesList}
-        contentContainerStyle={styles.messagesContainer}
-      />
-
-      {messages.length === 1 && (
-        <View style={styles.suggestionsContainer}>
-          <Paragraph style={styles.suggestionsTitle}>Try asking:</Paragraph>
-          {suggestedQuestions.map((question, index) => (
-            <Button
-              key={index}
-              mode="outlined"
-              onPress={() => setInputText(question)}
-              style={styles.suggestionButton}
-              compact
-            >
-              {question}
-            </Button>
-          ))}
+          <FlatList
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            style={styles.messagesList}
+            contentContainerStyle={styles.messagesContainer}
+            keyboardShouldPersistTaps="handled"
+          />
         </View>
-      )}
+      </TouchableWithoutFeedback>
 
       <View style={styles.inputContainer}>
-        <TextInput
-          mode="outlined"
-          placeholder="Ask about reviews, food, service, etc..."
-          value={inputText}
-          onChangeText={setInputText}
-          style={styles.textInput}
-          multiline
-          right={
-            <TextInput.Icon 
-              icon="send" 
-              onPress={sendMessage}
-              disabled={!inputText.trim()}
-            />
-          }
-          onSubmitEditing={sendMessage}
-        />
+        <View style={styles.inputRow}>
+          <TextInput
+            mode="outlined"
+            placeholder="Ask about reviews, food, service, etc..."
+            value={inputText}
+            onChangeText={setInputText}
+            style={styles.textInput}
+            multiline={false}
+            onSubmitEditing={sendMessage}
+            blurOnSubmit={false}
+            returnKeyType="send"
+          />
+          <IconButton
+            icon="send"
+            mode="contained"
+            onPress={sendMessage}
+            disabled={!inputText.trim()}
+            style={styles.sendButton}
+            iconColor={inputText.trim() ? '#6200ea' : '#ccc'}
+          />
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -177,6 +165,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  content: {
+    flex: 1,
   },
   header: {
     backgroundColor: '#6200ea',
@@ -240,29 +231,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
   },
-  suggestionsContainer: {
-    padding: 15,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  suggestionsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#666',
-  },
-  suggestionButton: {
-    marginVertical: 3,
-    marginHorizontal: 2,
-  },
   inputContainer: {
-    padding: 15,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   textInput: {
+    flex: 1,
     backgroundColor: 'white',
+    marginRight: 10,
+    maxHeight: 100,
+  },
+  sendButton: {
+    margin: 0,
   },
 });

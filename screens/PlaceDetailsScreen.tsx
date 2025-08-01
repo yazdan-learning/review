@@ -19,6 +19,7 @@ const { width } = Dimensions.get('window');
 
 export default function PlaceDetailsScreen({ navigation, route }: Props) {
   const { place } = route.params;
+  const [showReviews, setShowReviews] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
   const summary = mockReviewSummary;
 
@@ -50,7 +51,7 @@ export default function PlaceDetailsScreen({ navigation, route }: Props) {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Place Header */}
+      {/* 1. Place Info Card */}
       <Card style={styles.headerCard}>
         <Card.Content>
           <Title style={styles.placeName}>{place.name}</Title>
@@ -62,39 +63,11 @@ export default function PlaceDetailsScreen({ navigation, route }: Props) {
           <Paragraph style={styles.address}>{place.address}</Paragraph>
           <View style={styles.chipContainer}>
             <Chip style={styles.typeChip}>{place.type.replace('_', ' ')}</Chip>
-            <Chip 
-              style={[styles.statusChip, { backgroundColor: place.isOpen ? '#00b894' : '#e17055' }]}
-              textStyle={{ color: 'white' }}
-            >
-              {place.isOpen ? 'Open Now' : 'Closed'}
-            </Chip>
           </View>
         </Card.Content>
       </Card>
 
-      {/* Map */}
-      <Card style={styles.mapCard}>
-        <Card.Title title="Location" />
-        <Card.Content>
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: place.location.latitude,
-              longitude: place.location.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-          >
-            <Marker
-              coordinate={place.location}
-              title={place.name}
-              description={place.address}
-            />
-          </MapView>
-        </Card.Content>
-      </Card>
-
-      {/* AI Review Summary */}
+      {/* 2. AI Review Summary */}
       <Card style={styles.summaryCard}>
         <Card.Title title="AI Review Summary" subtitle={`Based on ${summary.total_reviews} reviews`} />
         <Card.Content>
@@ -126,7 +99,7 @@ export default function PlaceDetailsScreen({ navigation, route }: Props) {
         </Card.Content>
       </Card>
 
-      {/* Chat Button */}
+      {/* 3. Chat Bot Button */}
       <Button
         mode="contained"
         onPress={() => navigation.navigate('Chat', { place })}
@@ -136,31 +109,64 @@ export default function PlaceDetailsScreen({ navigation, route }: Props) {
         Ask Questions About This Place
       </Button>
 
-      {/* Individual Reviews */}
+      {/* 4. Google Map */}
+      <Card style={styles.mapCard}>
+        <Card.Title title="Location" />
+        <Card.Content>
+          <MapView
+            style={styles.map}
+            initialRegion={{
+              latitude: place.location.latitude,
+              longitude: place.location.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+          >
+            <Marker
+              coordinate={place.location}
+              title={place.name}
+              description={place.address}
+            />
+          </MapView>
+        </Card.Content>
+      </Card>
+
+      {/* 5. Individual Reviews (Collapsed by Default) */}
       <Card style={styles.reviewsCard}>
         <Card.Title 
           title="Customer Reviews" 
           subtitle={`${place.reviews?.length || 0} reviews`}
-        />
-        <Card.Content>
-          {place.reviews && place.reviews.length > 0 ? (
-            <>
-              {(showAllReviews ? place.reviews : place.reviews.slice(0, 3)).map(renderReview)}
-              
-              {place.reviews.length > 3 && (
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowAllReviews(!showAllReviews)}
-                  style={styles.showMoreButton}
-                >
-                  {showAllReviews ? 'Show Less' : `Show All ${place.reviews.length} Reviews`}
-                </Button>
-              )}
-            </>
-          ) : (
-            <Paragraph>No reviews available for this place.</Paragraph>
+          right={(props) => (
+            <Button
+              onPress={() => setShowReviews(!showReviews)}
+              mode="text"
+              compact
+            >
+              {showReviews ? 'Hide Reviews' : 'Show Reviews'}
+            </Button>
           )}
-        </Card.Content>
+        />
+        {showReviews && (
+          <Card.Content>
+            {place.reviews && place.reviews.length > 0 ? (
+              <>
+                {(showAllReviews ? place.reviews : place.reviews.slice(0, 3)).map(renderReview)}
+                
+                {place.reviews.length > 3 && (
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowAllReviews(!showAllReviews)}
+                    style={styles.showMoreButton}
+                  >
+                    {showAllReviews ? 'Show Less' : `Show All ${place.reviews.length} Reviews`}
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Paragraph>No reviews available for this place.</Paragraph>
+            )}
+          </Card.Content>
+        )}
       </Card>
     </ScrollView>
   );
@@ -210,9 +216,7 @@ const styles = StyleSheet.create({
   typeChip: {
     backgroundColor: '#e8f4f8',
   },
-  statusChip: {
-    paddingHorizontal: 8,
-  },
+
   mapCard: {
     margin: 10,
   },

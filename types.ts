@@ -35,7 +35,6 @@ export interface ReviewSummary {
 
 export type RootStackParamList = {
   Search: undefined;
-  PlaceList: { searchQuery: string };
   PlaceDetails: { place: Place };
   Chat: { place: Place };
 };
