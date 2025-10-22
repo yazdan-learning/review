@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { Searchbar, Title, Card, Paragraph, Chip } from 'react-native-paper';
+import { View, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { Searchbar, Title, Paragraph, ActivityIndicator } from 'react-native-paper';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Place } from '../types';
 import { mockSearchResults, mockPlaces } from '../mockData';
+import { searchPlaces, isApiKeyConfigured } from '../services/googlePlacesApi';
 
 type SearchScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Search'>;
 
@@ -15,17 +16,68 @@ export default function SearchScreen({ navigation }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [useGoogleApi, setUseGoogleApi] = useState(isApiKeyConfigured());
+  
+  // Debug: Check API configuration on component mount
+  useEffect(() => {
+    const checkApiConfig = () => {
+      const isConfigured = isApiKeyConfigured();
+      console.log('🔄 SearchScreen Mount - API Check:', {
+        isApiKeyConfigured: isConfigured,
+        useGoogleApi: useGoogleApi,
+        needsUpdate: isConfigured !== useGoogleApi
+      });
+      
+      if (isConfigured !== useGoogleApi) {
+        console.log('🔄 Updating useGoogleApi state to:', isConfigured);
+        setUseGoogleApi(isConfigured);
+      }
+    };
+    
+    checkApiConfig();
+  }, []);
 
   useEffect(() => {
-    if (searchQuery.trim().length > 0) {
-      const results = mockSearchResults(searchQuery);
-      setFilteredPlaces(results);
-      setShowDropdown(true);
-    } else {
-      setFilteredPlaces([]);
-      setShowDropdown(false);
-    }
-  }, [searchQuery]);
+    const delayedSearch = setTimeout(async () => {
+      if (searchQuery.trim().length > 2) {
+        setLoading(true);
+        try {
+          let results: Place[];
+          
+          if (useGoogleApi) {
+            // Use real Google Places API
+            results = await searchPlaces(searchQuery);
+          } else {
+            // Fallback to mock data
+            results = mockSearchResults(searchQuery);
+          }
+          
+          setFilteredPlaces(results);
+          setShowDropdown(true);
+        } catch (error) {
+          console.error('Search error:', error);
+          Alert.alert(
+            'Search Error',
+            'Failed to search places. Using offline data.',
+            [{ text: 'OK' }]
+          );
+          // Fallback to mock data on error
+          const results = mockSearchResults(searchQuery);
+          setFilteredPlaces(results);
+          setShowDropdown(true);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setFilteredPlaces([]);
+        setShowDropdown(false);
+        setLoading(false);
+      }
+    }, 500); // 500ms delay for debouncing
+
+    return () => clearTimeout(delayedSearch);
+  }, [searchQuery, useGoogleApi]);
 
   const handlePlaceSelect = (place: Place) => {
     setSearchQuery('');
@@ -52,27 +104,17 @@ export default function SearchScreen({ navigation }: Props) {
   };
 
   const renderDropdownItem = ({ item }: { item: Place }) => (
-    <TouchableOpacity onPress={() => handlePlaceSelect(item)}>
-      <Card style={styles.dropdownItem}>
-        <Card.Content>
-          <View style={styles.itemHeader}>
-            <Title style={styles.itemName}>{item.name}</Title>
-            <Chip 
-              style={[styles.typeChip, { backgroundColor: getPlaceTypeColor(item.type) }]}
-              textStyle={{ color: 'white' }}
-              compact
-            >
-              {item.type.replace('_', ' ')}
-            </Chip>
-          </View>
-          <View style={styles.itemDetails}>
-            <Paragraph style={styles.stars}>{renderStars(item.rating)}</Paragraph>
-            <Paragraph style={styles.rating}>{item.rating}</Paragraph>
-            <Paragraph style={styles.priceLevel}>{renderPriceLevel(item.priceLevel)}</Paragraph>
-          </View>
-          <Paragraph style={styles.address} numberOfLines={1}>{item.address}</Paragraph>
-        </Card.Content>
-      </Card>
+    <TouchableOpacity 
+      onPress={() => handlePlaceSelect(item)}
+      style={styles.dropdownItem}
+    >
+      <View style={styles.dropdownItemContent}>
+        <Paragraph style={styles.placeName}>{item.name}</Paragraph>
+        <Paragraph style={styles.placeAddress} numberOfLines={1}>{item.address}</Paragraph>
+      </View>
+      <View style={styles.placeRating}>
+        <Paragraph style={styles.ratingText}>⭐ {item.rating}</Paragraph>
+      </View>
     </TouchableOpacity>
   );
 
@@ -80,11 +122,12 @@ export default function SearchScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Title style={styles.title}>Find Places & Reviews</Title>
-      
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, showDropdown && styles.searchContainerTop]}>
+        {!showDropdown && (
+          <Title style={styles.title}>Find Places & Reviews</Title>
+        )}
         <Searchbar
-          placeholder="Search for restaurants, hotels, shops..."
+          placeholder={useGoogleApi ? "Search real places worldwide..." : "Search demo places..."}
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={styles.searchbar}
@@ -95,51 +138,72 @@ export default function SearchScreen({ navigation }: Props) {
           }}
         />
         
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" />
+            <Paragraph style={styles.loadingText}>Searching places...</Paragraph>
+          </View>
+        )}
+        
+        {/* Debug info */}
         {showDropdown && filteredPlaces.length > 0 && (
+          <Paragraph style={styles.debugInfo}>
+            Showing {filteredPlaces.length} results
+          </Paragraph>
+        )}
+        
+        {showDropdown && filteredPlaces.length > 0 && !loading && (
           <View style={styles.dropdown}>
-            <FlatList
-              data={filteredPlaces}
-              renderItem={renderDropdownItem}
-              keyExtractor={(item) => item.id}
-              style={styles.dropdownList}
+            <ScrollView
+              style={styles.dropdownScrollView}
               keyboardShouldPersistTaps="handled"
-            />
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
+              alwaysBounceVertical={false}
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
+              {filteredPlaces.map((item, index) => (
+                <View key={item.id}>
+                  {renderDropdownItem({ item })}
+                  {index < filteredPlaces.length - 1 && <View style={styles.separator} />}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        
+        {showDropdown && filteredPlaces.length === 0 && !loading && searchQuery.trim().length > 2 && (
+          <View style={styles.dropdown}>
+            <View style={styles.noResultsContainer}>
+              <Paragraph style={styles.noResultsText}>
+                No places found for "{searchQuery}"
+              </Paragraph>
+            </View>
           </View>
         )}
       </View>
 
       {!showDropdown && (
-        <Card style={styles.popularCard}>
-          <Card.Title title="Popular Places" subtitle="Tap to view details" />
-          <Card.Content>
-            {popularPlaces.map((place) => (
-              <TouchableOpacity 
-                key={place.id} 
-                onPress={() => handlePlaceSelect(place)}
-              >
-                <Card style={styles.popularItem}>
-                  <Card.Content>
-                    <View style={styles.itemHeader}>
-                      <Title style={styles.itemName}>{place.name}</Title>
-                      <Chip 
-                        style={[styles.typeChip, { backgroundColor: getPlaceTypeColor(place.type) }]}
-                        textStyle={{ color: 'white' }}
-                        compact
-                      >
-                        {place.type.replace('_', ' ')}
-                      </Chip>
-                    </View>
-                    <View style={styles.itemDetails}>
-                      <Paragraph style={styles.stars}>{renderStars(place.rating)}</Paragraph>
-                      <Paragraph style={styles.rating}>{place.rating}</Paragraph>
-                      <Paragraph style={styles.priceLevel}>{renderPriceLevel(place.priceLevel)}</Paragraph>
-                    </View>
-                  </Card.Content>
-                </Card>
-              </TouchableOpacity>
-            ))}
-          </Card.Content>
-        </Card>
+        <View style={styles.popularSection}>
+          <Title style={styles.sectionTitle}>Popular Places</Title>
+          {popularPlaces.map((place) => (
+            <TouchableOpacity 
+              key={place.id} 
+              onPress={() => handlePlaceSelect(place)}
+              style={styles.popularItem}
+            >
+              <View style={styles.dropdownItemContent}>
+                <Paragraph style={styles.placeName}>{place.name}</Paragraph>
+                <Paragraph style={styles.placeAddress} numberOfLines={1}>{place.address}</Paragraph>
+              </View>
+              <View style={styles.placeRating}>
+                <Paragraph style={styles.ratingText}>⭐ {place.rating}</Paragraph>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       )}
     </View>
   );
@@ -148,27 +212,32 @@ export default function SearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
   },
   title: {
     textAlign: 'center',
-    marginTop: 40,
-    marginBottom: 30,
     fontSize: 24,
+    marginBottom: 20,
+    color: '#333',
   },
   searchContainer: {
     position: 'relative',
     zIndex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 10,
+  },
+  searchContainerTop: {
+    paddingTop: 20,
   },
   searchbar: {
     marginBottom: 10,
   },
   dropdown: {
     position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
+    top: 70,
+    left: 20,
+    right: 20,
     backgroundColor: 'white',
     borderRadius: 8,
     elevation: 5,
@@ -176,58 +245,94 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    maxHeight: 300,
+    maxHeight: 500,
     zIndex: 1000,
   },
-  dropdownList: {
-    maxHeight: 300,
+  dropdownScrollView: {
+    flex: 1,
   },
   dropdownItem: {
-    margin: 5,
-    elevation: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
   },
-  popularCard: {
-    marginTop: 20,
+  dropdownItemContent: {
+    flex: 1,
+  },
+  placeName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  placeAddress: {
+    fontSize: 14,
+    color: '#666',
+  },
+  placeRating: {
+    marginLeft: 12,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 16,
+  },
+  popularSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    marginBottom: 15,
+    color: '#333',
   },
   popularItem: {
-    marginVertical: 5,
-    backgroundColor: '#ffffff',
-  },
-  itemHeader: {
+    paddingVertical: 15,
+    paddingHorizontal: 16,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginVertical: 2,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  itemName: {
-    flex: 1,
-    fontSize: 16,
-  },
-  typeChip: {
-    marginLeft: 10,
-  },
-  itemDetails: {
+  loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    padding: 15,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    marginTop: 10,
   },
-  stars: {
-    fontSize: 14,
-    color: '#FFD700',
-    marginRight: 8,
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginRight: 15,
-  },
-  priceLevel: {
-    fontSize: 14,
-    color: '#00b894',
-    fontWeight: 'bold',
-  },
-  address: {
-    fontSize: 12,
+  loadingText: {
+    marginLeft: 10,
     color: '#666',
+  },
+  noResultsContainer: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    textAlign: 'center',
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  debugInfo: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 5,
   },
 });
