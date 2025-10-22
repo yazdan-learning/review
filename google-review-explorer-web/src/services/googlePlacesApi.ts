@@ -1,7 +1,7 @@
 import { Place, Review } from '../types';
 
-// You'll need to add your API key here or use environment variables
-const API_KEY: string = '';
+// API key from environment variables
+const API_KEY: string = process.env.REACT_APP_GOOGLE_API_KEY || '';
 const BASE_URL = 'https://places.googleapis.com/v1';
 
 interface GooglePlace {
@@ -240,8 +240,8 @@ export const isApiKeyConfigured = (): boolean => {
 // N8N BACKEND INTEGRATION (Recommended)
 // ============================================
 
-// Configure your n8n webhook URL here
-const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook/review';
+// n8n webhook URL from environment variables
+const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/review';
 
 /**
  * Send reviews to n8n for AI summarization with language support
