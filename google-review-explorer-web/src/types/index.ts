@@ -12,6 +12,7 @@ export interface Place {
   photoUrl?: string;
   isOpen: boolean;
   reviews?: Review[];
+  userRatingCount?: number; // Total number of reviews on Google
 }
 
 export interface Review {

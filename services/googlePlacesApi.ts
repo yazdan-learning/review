@@ -1,7 +1,7 @@
 import { Place, Review } from '../types';
 
 // You'll need to add your API key here or use environment variables
-const API_KEY: string = 'AIzaSyATjvYEk5exgwO4QAn-xTLMIm70dnEowt0'; // Replace with your actual API key
+const API_KEY: string = ''; // Replace with your actual API key
 const BASE_URL = 'https://places.googleapis.com/v1';
 
 interface GooglePlace {

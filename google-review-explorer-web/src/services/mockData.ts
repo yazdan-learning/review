@@ -40,7 +40,8 @@ export const mockPlaces: Place[] = [
       longitude: -74.0060
     },
     isOpen: true,
-    reviews: mockReviews
+    reviews: mockReviews,
+    userRatingCount: 127
   },
   {
     id: '2',
@@ -54,6 +55,7 @@ export const mockPlaces: Place[] = [
       longitude: -73.9851
     },
     isOpen: true,
+    userRatingCount: 89,
     reviews: [
       {
         id: '4',

@@ -9,13 +9,16 @@ import {
   Chip,
   Box,
   Divider,
-  Paper,
-  Collapse,
   CircularProgress,
-  Alert
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
-import { Place, Review, ReviewSummary } from '../types';
+import TranslateIcon from '@mui/icons-material/Translate';
+import { Place, ReviewSummary } from '../types';
 import { mockReviewSummary } from '../services/mockData';
 import { getAISummaryFromN8n } from '../services/googlePlacesApi';
 
@@ -50,18 +53,42 @@ const parseAISummaryText = (text: string, place: Place): ReviewSummary => {
   };
 };
 
+// Available languages for AI summary
+const AVAILABLE_LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'fr', name: 'French', flag: '🇫🇷' },
+  { code: 'de', name: 'German', flag: '🇩🇪' },
+  { code: 'it', name: 'Italian', flag: '🇮🇹' },
+  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
+  { code: 'ru', name: 'Russian', flag: '🇷🇺' },
+  { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+  { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+  { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
+  { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
+  { code: 'fa', name: 'Persian (Farsi)', flag: '🇮🇷' },
+  { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
+  { code: 'tr', name: 'Turkish', flag: '🇹🇷' },
+  { code: 'nl', name: 'Dutch', flag: '🇳🇱' },
+  { code: 'pl', name: 'Polish', flag: '🇵🇱' },
+  { code: 'sv', name: 'Swedish', flag: '🇸🇪' },
+  { code: 'da', name: 'Danish', flag: '🇩🇰' },
+  { code: 'fi', name: 'Finnish', flag: '🇫🇮' },
+  { code: 'no', name: 'Norwegian', flag: '🇳🇴' },
+  { code: 'cs', name: 'Czech', flag: '🇨🇿' },
+];
+
 const PlaceDetailsPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { place: initialPlace } = location.state as { place: Place };
-  const [place, setPlace] = useState<Place>(initialPlace);
-  const [showReviews, setShowReviews] = useState(false);
-  const [showAllReviews, setShowAllReviews] = useState(false);
+  const [place] = useState<Place>(initialPlace);
   const [summary, setSummary] = useState<ReviewSummary>(mockReviewSummary);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
 
-  // Send reviews to n8n for AI summarization on mount
+  // Send reviews to n8n for AI summarization when language changes
   useEffect(() => {
     const loadAISummary = async () => {
       try {
@@ -69,9 +96,9 @@ const PlaceDetailsPage: React.FC = () => {
         
         // If place has reviews, send to n8n for AI summarization
         if (place.reviews && place.reviews.length > 0) {
-          console.log('🔄 Sending', place.reviews.length, 'reviews to n8n for AI summary');
+          console.log('🔄 Sending', place.reviews.length, 'reviews to n8n for AI summary in', selectedLanguage);
           
-          const data = await getAISummaryFromN8n(place, place.reviews);
+          const data = await getAISummaryFromN8n(place, place.reviews, selectedLanguage);
           console.log('✅ Received AI summary from n8n:', data);
 
           // Only update summary if we got valid data from n8n
@@ -112,7 +139,8 @@ const PlaceDetailsPage: React.FC = () => {
     };
 
     loadAISummary();
-  }, [place.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place.id, selectedLanguage]); // Re-run when language changes
 
   const renderStars = (rating: number) => {
     return '★'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
@@ -121,30 +149,6 @@ const PlaceDetailsPage: React.FC = () => {
   const renderPriceLevel = (level: number) => {
     return '$'.repeat(level);
   };
-
-  const renderReview = (review: Review) => (
-    <Paper key={review.id} elevation={1} sx={{ p: 2, mb: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="h6" sx={{ fontSize: '1rem' }}>
-          {review.authorName}
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2" sx={{ color: '#FFD700' }}>
-            {renderStars(review.rating)}
-          </Typography>
-          <Typography variant="body2" fontWeight="bold">
-            {review.rating}
-          </Typography>
-        </Box>
-      </Box>
-      <Typography variant="body2" paragraph>
-        {review.text}
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        {review.relativeTimeDescription}
-      </Typography>
-    </Paper>
-  );
 
   // Show loading state
   if (loading) {
@@ -209,12 +213,43 @@ const PlaceDetailsPage: React.FC = () => {
       {/* 2. AI Review Summary */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h5" gutterBottom fontWeight="bold">
-            AI Review Summary
-          </Typography>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Based on {summary.total_reviews} reviews
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Typography variant="h5" gutterBottom fontWeight="bold">
+                AI Review Summary
+              </Typography>
+              <Typography variant="subtitle2" color="text.secondary">
+                Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : summary.total_reviews} reviews
+              </Typography>
+            </Box>
+            
+            {/* Language Selector */}
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="language-select-label">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <TranslateIcon fontSize="small" />
+                  Language
+                </Box>
+              </InputLabel>
+              <Select
+                labelId="language-select-label"
+                id="language-select"
+                value={selectedLanguage}
+                label="Language"
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                disabled={loading}
+              >
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <MenuItem key={lang.code} value={lang.code}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span style={{ fontSize: '1.2em' }}>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
             <Typography variant="h3" sx={{ color: '#00b894' }}>
@@ -321,7 +356,7 @@ const PlaceDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 5. Individual Reviews (Collapsed by Default) */}
+      {/* 5. View All Reviews on Google */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -330,40 +365,43 @@ const PlaceDetailsPage: React.FC = () => {
                 Customer Reviews
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {place.reviews?.length || 0} reviews
+                {place.userRatingCount 
+                  ? `${place.userRatingCount.toLocaleString()} reviews on Google Maps`
+                  : 'See all reviews on Google Maps'}
               </Typography>
             </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => setShowReviews(!showReviews)}
-            >
-              {showReviews ? 'Hide Reviews' : 'Show Reviews'}
-            </Button>
           </Box>
           
-          <Collapse in={showReviews}>
-            {place.reviews && place.reviews.length > 0 ? (
-              <>
-                {(showAllReviews ? place.reviews : place.reviews.slice(0, 3)).map(renderReview)}
-                
-                {place.reviews.length > 3 && (
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => setShowAllReviews(!showAllReviews)}
-                    sx={{ mt: 2 }}
-                  >
-                    {showAllReviews ? 'Show Less' : `Show All ${place.reviews.length} Reviews`}
-                  </Button>
-                )}
-              </>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No reviews available for this place.
-              </Typography>
-            )}
-          </Collapse>
+          <Button
+            variant="contained"
+            fullWidth
+            size="large"
+            onClick={() => {
+              // Generate Google Maps URL with place details
+              const googleMapsUrl = place.id 
+                ? `https://www.google.com/maps/place/?q=place_id:${place.id}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.address)}`;
+              
+              // Open in new tab
+              window.open(googleMapsUrl, '_blank');
+            }}
+            sx={{ 
+              py: 1.5,
+              backgroundColor: '#4285f4', // Google blue
+              '&:hover': {
+                backgroundColor: '#357ae8'
+              }
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <span style={{ fontSize: '1.2em' }}>📍</span>
+              <span>View All Reviews on Google Maps</span>
+            </Box>
+          </Button>
+          
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+            Opens Google Maps in a new tab
+          </Typography>
         </CardContent>
       </Card>
     </Container>

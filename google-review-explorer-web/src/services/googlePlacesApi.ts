@@ -1,7 +1,7 @@
 import { Place, Review } from '../types';
 
 // You'll need to add your API key here or use environment variables
-const API_KEY: string = 'AIzaSyATjvYEk5exgwO4QAn-xTLMIm70dnEowt0';
+const API_KEY: string = '';
 const BASE_URL = 'https://places.googleapis.com/v1';
 
 interface GooglePlace {
@@ -13,6 +13,7 @@ interface GooglePlace {
   types: string[];
   rating?: number;
   priceLevel?: string;
+  userRatingCount?: number; // Total number of reviews
   location: {
     latitude: number;
     longitude: number;
@@ -35,10 +36,6 @@ interface GooglePlace {
     publishTime: string;
     relativePublishTimeDescription: string;
   }>;
-}
-
-interface GooglePlacesResponse {
-  places: GooglePlace[];
 }
 
 // Convert Google Places price level to our format
@@ -99,6 +96,7 @@ const convertGooglePlaceToPlace = (googlePlace: GooglePlace): Place => {
     },
     isOpen: googlePlace.currentOpeningHours?.openNow || true,
     reviews: reviews,
+    userRatingCount: googlePlace.userRatingCount, // Total review count from Google
   };
 };
 
@@ -213,8 +211,8 @@ export const getPlaceDetailsWithReviews = async (placeId: string): Promise<Place
       method: 'GET',
       headers: {
         'X-Goog-Api-Key': API_KEY,
-        // Include reviews for AI summarization ($10 per 1,000)
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,types,rating,priceLevel,location,reviews',
+        // Include reviews and userRatingCount for AI summarization ($10 per 1,000)
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,types,rating,priceLevel,location,reviews,userRatingCount',
       }
     });
 
@@ -246,14 +244,18 @@ export const isApiKeyConfigured = (): boolean => {
 const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook/review';
 
 /**
- * Send reviews to n8n for AI summarization
+ * Send reviews to n8n for AI summarization with language support
  * Frontend loads reviews from Google API, n8n only does AI processing
  * This allows n8n to focus on LLM work and caching summaries
+ * @param place - Place object with details
+ * @param reviews - Array of reviews to summarize
+ * @param language - Language code for AI summary (default: 'en')
  */
-export const getAISummaryFromN8n = async (place: Place, reviews: Review[]) => {
+export const getAISummaryFromN8n = async (place: Place, reviews: Review[], language: string = 'en') => {
   try {
     console.log('🔄 Sending reviews to n8n for AI summary:', place.id);
     console.log('📊 Sending', reviews.length, 'reviews for summarization');
+    console.log('🌍 Language:', language);
     
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
@@ -266,7 +268,8 @@ export const getAISummaryFromN8n = async (place: Place, reviews: Review[]) => {
         placeAddress: place.address,
         rating: place.rating,
         reviews: reviews,
-        reviewCount: reviews.length
+        reviewCount: reviews.length,
+        language: language  // Add language parameter
       })
     });
 
