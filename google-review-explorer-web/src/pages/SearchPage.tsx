@@ -10,13 +10,11 @@ import {
   List,
   ListItem,
   ListItemButton,
-  ListItemText,
-  Chip,
   InputAdornment
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { Place } from '../types';
-import { mockPlaces, mockSearchResults } from '../services/mockData';
+import { mockSearchResults } from '../services/mockData';
 import { searchPlaces, isApiKeyConfigured, resetAutocompleteSession, getPlaceDetailsWithReviews } from '../services/googlePlacesApi';
 
 const SearchPage: React.FC = () => {
@@ -27,7 +25,12 @@ const SearchPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [useGoogleApi] = useState(isApiKeyConfigured());
   
-  const popularPlaces = mockPlaces.slice(0, 3);
+  // Example searches to help users get started
+  const exampleSearches = [
+    { query: 'restaurant', icon: '🍽️', description: 'Find restaurants nearby' },
+    { query: 'coffee shop', icon: '☕', description: 'Discover coffee shops' },
+    { query: 'hotel', icon: '🏨', description: 'Search for hotels' },
+  ];
 
   const handleSearch = useCallback(async (query: string) => {
     if (query.trim().length === 0) {
@@ -49,13 +52,10 @@ const SearchPage: React.FC = () => {
         const results = await searchPlaces(query);
         setFilteredPlaces(results);
       } else {
-        // Use mock data
         const results = mockSearchResults(query);
         setFilteredPlaces(results);
       }
     } catch (error) {
-      console.error('Search error:', error);
-      // Fallback to mock data on error
       const results = mockSearchResults(query);
       setFilteredPlaces(results);
     } finally {
@@ -72,42 +72,26 @@ const SearchPage: React.FC = () => {
   }, [searchQuery, handleSearch]);
 
   const handlePlaceSelect = async (place: Place) => {
-    // Reset autocomplete session (ends the session for billing)
     resetAutocompleteSession();
     
-    // Load reviews from Google API if using real API
     if (useGoogleApi) {
       try {
         setLoading(true);
-        console.log('📍 Loading place details with reviews:', place.name);
-        
-        // Get full place details including reviews
         const placeWithReviews = await getPlaceDetailsWithReviews(place.id);
         
         if (placeWithReviews) {
-          console.log('✅ Loaded', placeWithReviews.reviews?.length || 0, 'reviews');
-          // Navigate with full place data including reviews
           navigate('/place-details', { state: { place: placeWithReviews } });
         } else {
-          // Fallback to autocomplete data
           navigate('/place-details', { state: { place } });
         }
       } catch (error) {
-        console.error('Error loading place with reviews:', error);
-        // Navigate with autocomplete data on error
         navigate('/place-details', { state: { place } });
       } finally {
         setLoading(false);
       }
     } else {
-      // Use mock data
-      console.log('📍 Navigating with mock data:', place.name);
       navigate('/place-details', { state: { place } });
     }
-  };
-
-  const renderStars = (rating: number) => {
-    return '⭐'.repeat(Math.round(rating));
   };
 
   return (
@@ -119,11 +103,9 @@ const SearchPage: React.FC = () => {
             <Typography variant="h4" component="h1" gutterBottom color="primary" fontWeight="bold">
               Find Places & Reviews
             </Typography>
-            <Chip 
-              label={useGoogleApi ? '🌐 Using Google API' : '📱 Using Demo Data'}
-              color={useGoogleApi ? 'success' : 'default'}
-              sx={{ mt: 1 }}
-            />
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 600, mx: 'auto' }}>
+              Search for any place and get AI-powered summaries of Google reviews in your preferred language
+            </Typography>
           </Box>
         )}
 
@@ -148,9 +130,31 @@ const SearchPage: React.FC = () => {
               ),
             }}
             sx={{
+              backgroundColor: 'white',
+              borderRadius: 2,
               '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                backgroundColor: 'white'
+                backgroundColor: 'white !important',
+                '&:hover': {
+                  backgroundColor: 'white !important',
+                },
+                '&.Mui-focused': {
+                  backgroundColor: 'white !important',
+                },
+                '& fieldset': {
+                  borderColor: 'rgba(0, 0, 0, 0.23)',
+                },
+                '&:hover fieldset': {
+                  borderColor: 'rgba(0, 0, 0, 0.87)',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#6200ea',
+                },
+              },
+              '& .MuiOutlinedInput-input': {
+                backgroundColor: 'white !important',
+              },
+              '& input': {
+                backgroundColor: 'white !important',
               }
             }}
           />
@@ -224,52 +228,40 @@ const SearchPage: React.FC = () => {
           )}
         </Box>
 
-        {/* Popular Places Section */}
+        {/* Example Searches Section */}
         {!showDropdown && (
           <Box>
             <Typography variant="h6" gutterBottom fontWeight="bold">
-              Popular Places
+              Try Searching For
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {popularPlaces.map((place) => (
+              {exampleSearches.map((example, index) => (
                 <Paper
-                  key={place.id}
+                  key={index}
                   elevation={2}
                   sx={{
-                    p: 2,
+                    p: 2.5,
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     '&:hover': {
                       elevation: 4,
                       transform: 'translateY(-2px)',
-                      boxShadow: 3
+                      boxShadow: 3,
+                      backgroundColor: 'primary.50'
                     }
                   }}
-                  onClick={() => handlePlaceSelect(place)}
+                  onClick={() => setSearchQuery(example.query)}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ flex: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h3" sx={{ fontSize: '2rem' }}>
+                      {example.icon}
+                    </Typography>
+                    <Box>
                       <Typography variant="h6" fontWeight="bold">
-                        {place.name}
+                        {example.query}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        {place.address}
-                      </Typography>
-                      <Box sx={{ mt: 1 }}>
-                        <Chip
-                          label={place.type.replace('_', ' ').toUpperCase()}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      </Box>
-                    </Box>
-                    <Box sx={{ ml: 2, textAlign: 'right' }}>
-                      <Typography variant="body1">
-                        {renderStars(place.rating)}
-                      </Typography>
-                      <Typography variant="body2" fontWeight="bold">
-                        {place.rating}
+                      <Typography variant="body2" color="text.secondary">
+                        {example.description}
                       </Typography>
                     </Box>
                   </Box>

@@ -19,37 +19,19 @@ import {
 import ChatIcon from '@mui/icons-material/Chat';
 import TranslateIcon from '@mui/icons-material/Translate';
 import { Place, ReviewSummary } from '../types';
-import { mockReviewSummary } from '../services/mockData';
 import { getAISummaryFromN8n } from '../services/googlePlacesApi';
 
 // Helper function to parse AI text into structured summary
 const parseAISummaryText = (text: string, place: Place): ReviewSummary => {
-  // If text is too short, return demo data
-  if (!text || text.length < 50) {
-    return mockReviewSummary;
-  }
-
-  // Try to parse the text into structured format
-  // The AI text is usually a paragraph, so we'll use it as sentiment_summary
+  // The AI text is a paragraph summary from n8n
   return {
     overall_rating: place.rating || 4.0,
     total_reviews: place.reviews?.length || 0,
     sentiment_summary: text.trim(),
-    pros: [
-      "Based on customer feedback",
-      "See reviews below for details",
-      "Multiple positive mentions"
-    ],
-    cons: [
-      "See reviews for specific concerns",
-      "Individual experiences may vary"
-    ],
-    key_themes: [
-      "Customer Service",
-      "Quality",
-      "Experience"
-    ],
-    recommendation: "Check individual reviews for detailed insights."
+    pros: [],
+    cons: [],
+    key_themes: [],
+    recommendation: ""
   };
 };
 
@@ -83,7 +65,7 @@ const PlaceDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const { place: initialPlace } = location.state as { place: Place };
   const [place] = useState<Place>(initialPlace);
-  const [summary, setSummary] = useState<ReviewSummary>(mockReviewSummary);
+  const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
@@ -96,15 +78,10 @@ const PlaceDetailsPage: React.FC = () => {
         
         // If place has reviews, send to n8n for AI summarization
         if (place.reviews && place.reviews.length > 0) {
-          console.log('🔄 Sending', place.reviews.length, 'reviews to n8n for AI summary in', selectedLanguage);
-          
           const data = await getAISummaryFromN8n(place, place.reviews, selectedLanguage);
-          console.log('✅ Received AI summary from n8n:', data);
 
           // Only update summary if we got valid data from n8n
           if (data && data.length > 0 && data[0].output && data[0].output.text) {
-            console.log('✅ Using real AI summary from n8n');
-            
             // Clean up the text - remove markdown and extra formatting
             let cleanText = data[0].output.text;
             
@@ -122,17 +99,13 @@ const PlaceDetailsPage: React.FC = () => {
             setSummary(summaryData);
             setError(null); // Clear any errors
           } else {
-            console.log('⚠️ n8n response invalid, using demo summary');
-            setError('n8n service returned invalid data. Using demo summary.');
+            setError('AI service returned invalid data. Please try again later.');
           }
         } else {
-          console.log('⚠️ No reviews available, using demo summary');
-          setError('No reviews available for this place. Showing demo summary.');
+          setError('No reviews available for this place.');
         }
       } catch (err) {
-        console.error('💥 Error loading AI summary from n8n:', err);
-        setError('n8n service not available. Using demo AI summary.');
-        // Keep using mock summary as fallback - don't change setSummary
+        setError('AI service is currently unavailable. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -151,7 +124,7 @@ const PlaceDetailsPage: React.FC = () => {
   };
 
   // Show loading state
-  if (loading) {
+  if (loading && !error) {
     return (
       <Container maxWidth="md" sx={{ mt: 4, mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <CircularProgress size={60} />
@@ -159,7 +132,7 @@ const PlaceDetailsPage: React.FC = () => {
           Generating AI Summary...
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Analyzing {place.reviews?.length || 0} reviews with AI
+          Analyzing {place.reviews?.length || 0} reviews
         </Typography>
       </Container>
     );
@@ -177,7 +150,7 @@ const PlaceDetailsPage: React.FC = () => {
 
       {/* Show error if n8n is not available */}
       {error && (
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
@@ -210,90 +183,65 @@ const PlaceDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 2. AI Review Summary */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-            <Box>
-              <Typography variant="h5" gutterBottom fontWeight="bold">
-                AI Review Summary
+      {/* 2. AI Review Summary - Only show if successfully loaded */}
+      {summary && !error ? (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Typography variant="h5" gutterBottom fontWeight="bold">
+                  AI Review Summary
+                </Typography>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : summary.total_reviews} reviews
+                </Typography>
+              </Box>
+              
+              {/* Language Selector */}
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel id="language-select-label">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <TranslateIcon fontSize="small" />
+                    Language
+                  </Box>
+                </InputLabel>
+                <Select
+                  labelId="language-select-label"
+                  id="language-select"
+                  value={selectedLanguage}
+                  label="Language"
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  disabled={loading}
+                >
+                  {AVAILABLE_LANGUAGES.map((lang) => (
+                    <MenuItem key={lang.code} value={lang.code}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span style={{ fontSize: '1.2em' }}>{lang.flag}</span>
+                        <span>{lang.name}</span>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
+              <Typography variant="h3" sx={{ color: '#00b894' }}>
+                {summary.overall_rating}/5
               </Typography>
-              <Typography variant="subtitle2" color="text.secondary">
-                Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : summary.total_reviews} reviews
+              <Typography variant="h5" sx={{ color: '#FFD700' }}>
+                {renderStars(summary.overall_rating)}
               </Typography>
             </Box>
             
-            {/* Language Selector */}
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel id="language-select-label">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <TranslateIcon fontSize="small" />
-                  Language
-                </Box>
-              </InputLabel>
-              <Select
-                labelId="language-select-label"
-                id="language-select"
-                value={selectedLanguage}
-                label="Language"
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                disabled={loading}
-              >
-                {AVAILABLE_LANGUAGES.map((lang) => (
-                  <MenuItem key={lang.code} value={lang.code}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: '1.2em' }}>{lang.flag}</span>
-                      <span>{lang.name}</span>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
-            <Typography variant="h3" sx={{ color: '#00b894' }}>
-              {summary.overall_rating}/5
+            <Typography variant="body1" paragraph>
+              {summary.sentiment_summary}
             </Typography>
-            <Typography variant="h5" sx={{ color: '#FFD700' }}>
-              {renderStars(summary.overall_rating)}
-            </Typography>
-          </Box>
-          
-          <Typography variant="body1" paragraph>
-            {summary.sentiment_summary}
-          </Typography>
-          
-          <Divider sx={{ my: 2 }} />
-          
-          {/* <Typography variant="h6" gutterBottom fontWeight="bold">
-            Pros
-          </Typography>
-          {summary.pros.map((pro, index) => (
-            <Typography key={index} variant="body2" sx={{ mb: 0.5, color: 'text.secondary' }}>
-              • {pro}
-            </Typography>
-          ))} */}
-          
-          {/* <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ mt: 2 }}>
-            Cons
-          </Typography>
-          {summary.cons.map((con, index) => (
-            <Typography key={index} variant="body2" sx={{ mb: 0.5, color: 'text.secondary' }}>
-              • {con}
-            </Typography>
-          ))} */}
-          
-          {/* <Divider sx={{ my: 2 }} />
-          
-          <Typography variant="h6" gutterBottom fontWeight="bold">
-            Recommendation
-          </Typography>
-          <Typography variant="body1" sx={{ fontStyle: 'italic' }}>
-            {summary.recommendation}
-          </Typography> */}
-        </CardContent>
-      </Card>
+            
+            <Divider sx={{ my: 2 }} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* 3. Chat Bot Button */}
       <Button

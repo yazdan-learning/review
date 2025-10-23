@@ -120,24 +120,19 @@ const generateSessionToken = (): string => {
  * This ends the current session and starts billing for next search
  */
 export const resetAutocompleteSession = () => {
-  console.log('🔄 Resetting autocomplete session');
   currentSessionToken = null;
 };
 
 /**
- * Search places using Autocomplete API (MUCH CHEAPER!)
- * Cost: $2.83 per 1,000 sessions (vs $32 for Text Search)
- * Savings: 91%! 🎉
+ * Search places using Autocomplete API
+ * Cost: $2.83 per 1,000 sessions
  */
 export const searchPlaces = async (query: string): Promise<Place[]> => {
   try {
     // Create new session token if not exists
     if (!currentSessionToken) {
       currentSessionToken = generateSessionToken();
-      console.log('🆕 New autocomplete session started:', currentSessionToken);
     }
-
-    console.log('🔍 Making Autocomplete API request for:', query);
     
     const response = await fetch(`${BASE_URL}/places:autocomplete`, {
       method: 'POST',
@@ -149,36 +144,31 @@ export const searchPlaces = async (query: string): Promise<Place[]> => {
         input: query,
         sessionToken: currentSessionToken,
         languageCode: 'en',
-        includedPrimaryTypes: ['restaurant', 'cafe', 'bar', 'hotel', 'store'], // Optional: filter types
+        includedPrimaryTypes: ['restaurant', 'cafe', 'bar', 'hotel', 'store'],
       })
     });
 
-    console.log('📡 API Response Status:', response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ API Error Response:', errorText);
       throw new Error(`Google Places Autocomplete API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('✅ Autocomplete Response:', data);
     
     if (!data.suggestions || data.suggestions.length === 0) {
-      console.log('⚠️ No suggestions found');
       return [];
     }
 
     // Convert autocomplete suggestions to our Place format
     const places: Place[] = data.suggestions
-      .filter((suggestion: any) => suggestion.placePrediction) // Only place predictions
+      .filter((suggestion: any) => suggestion.placePrediction)
       .map((suggestion: any) => {
         const prediction = suggestion.placePrediction;
         return {
           id: prediction.placeId,
           name: prediction.structuredFormat?.mainText?.text || prediction.text?.text || 'Unknown',
           address: prediction.structuredFormat?.secondaryText?.text || '',
-          rating: 0, // Rating not available in autocomplete (will load later)
+          rating: 0,
           type: prediction.types?.[0] || 'place',
           priceLevel: 0,
           location: {
@@ -190,10 +180,8 @@ export const searchPlaces = async (query: string): Promise<Place[]> => {
         };
       });
 
-    console.log('🏢 Converted suggestions:', places.length);
     return places;
   } catch (error) {
-    console.error('💥 Error in autocomplete search:', error);
     throw error;
   }
 };
@@ -201,33 +189,24 @@ export const searchPlaces = async (query: string): Promise<Place[]> => {
 /**
  * Get place details WITH REVIEWS by place ID
  * Cost: $10 per 1,000 requests (Basic + Atmosphere for reviews)
- * This loads reviews from Google, then sends to n8n for AI summarization
  */
 export const getPlaceDetailsWithReviews = async (placeId: string): Promise<Place | null> => {
   try {
-    console.log('🔍 Fetching place details with reviews for:', placeId);
-    
     const response = await fetch(`${BASE_URL}/places/${placeId}`, {
       method: 'GET',
       headers: {
         'X-Goog-Api-Key': API_KEY,
-        // Include reviews and userRatingCount for AI summarization ($10 per 1,000)
         'X-Goog-FieldMask': 'id,displayName,formattedAddress,types,rating,priceLevel,location,reviews,userRatingCount',
       }
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Place Details API Error:', errorText);
       throw new Error(`Place Details API error: ${response.status}`);
     }
 
     const googlePlace: GooglePlace = await response.json();
-    console.log('✅ Place details loaded with', googlePlace.reviews?.length || 0, 'reviews');
-    
     return convertGooglePlaceToPlace(googlePlace);
   } catch (error) {
-    console.error('💥 Error getting place details:', error);
     throw error;
   }
 };
@@ -245,18 +224,12 @@ const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'http://localho
 
 /**
  * Send reviews to n8n for AI summarization with language support
- * Frontend loads reviews from Google API, n8n only does AI processing
- * This allows n8n to focus on LLM work and caching summaries
  * @param place - Place object with details
  * @param reviews - Array of reviews to summarize
  * @param language - Language code for AI summary (default: 'en')
  */
 export const getAISummaryFromN8n = async (place: Place, reviews: Review[], language: string = 'en') => {
   try {
-    console.log('🔄 Sending reviews to n8n for AI summary:', place.id);
-    console.log('📊 Sending', reviews.length, 'reviews for summarization');
-    console.log('🌍 Language:', language);
-    
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: {
@@ -269,7 +242,7 @@ export const getAISummaryFromN8n = async (place: Place, reviews: Review[], langu
         rating: place.rating,
         reviews: reviews,
         reviewCount: reviews.length,
-        language: language  // Add language parameter
+        language: language
       })
     });
 
@@ -278,11 +251,8 @@ export const getAISummaryFromN8n = async (place: Place, reviews: Review[], langu
     }
 
     const data = await response.json();
-    console.log('🔍 Received AI summary from n8n:', data);
-    
     return data;
   } catch (error) {
-    console.error('💥 Error fetching from n8n:', error);
     throw error;
   }
 };
