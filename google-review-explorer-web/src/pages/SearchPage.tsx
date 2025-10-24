@@ -10,7 +10,9 @@ import {
   List,
   ListItem,
   ListItemButton,
-  InputAdornment
+  InputAdornment,
+  Alert,
+  Chip
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { Place } from '../types';
@@ -24,6 +26,7 @@ const SearchPage: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [useGoogleApi] = useState(isApiKeyConfigured());
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   
   // Example searches to help users get started
   const exampleSearches = [
@@ -31,6 +34,46 @@ const SearchPage: React.FC = () => {
     { query: 'coffee shop', icon: '☕', description: 'Discover coffee shops' },
     { query: 'hotel', icon: '🏨', description: 'Search for hotels' },
   ];
+
+  // Rate limiting: Check daily usage
+  const checkRateLimit = (): boolean => {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const storedDate = localStorage.getItem('searchDate');
+    const storedCount = parseInt(localStorage.getItem('searchCount') || '0');
+
+    // Reset count if it's a new day
+    if (storedDate !== today) {
+      localStorage.setItem('searchDate', today);
+      localStorage.setItem('searchCount', '0');
+      return true;
+    }
+
+    // Check if limit reached
+    if (storedCount >= 10) {
+      setRateLimitError('Daily limit reached (10 searches). Please try again tomorrow.');
+      return false;
+    }
+
+    return true;
+  };
+
+  // Increment search count
+  const incrementSearchCount = () => {
+    const count = parseInt(localStorage.getItem('searchCount') || '0');
+    localStorage.setItem('searchCount', (count + 1).toString());
+  };
+
+  // Get remaining searches
+  const getRemainingSearches = (): number => {
+    const today = new Date().toISOString().split('T')[0];
+    const storedDate = localStorage.getItem('searchDate');
+    const storedCount = parseInt(localStorage.getItem('searchCount') || '0');
+
+    if (storedDate !== today) {
+      return 10;
+    }
+    return Math.max(0, 10 - storedCount);
+  };
 
   const handleSearch = useCallback(async (query: string) => {
     if (query.trim().length === 0) {
@@ -72,11 +115,20 @@ const SearchPage: React.FC = () => {
   }, [searchQuery, handleSearch]);
 
   const handlePlaceSelect = async (place: Place) => {
+    // Check rate limit before loading place details (this is the expensive call)
+    if (useGoogleApi && !checkRateLimit()) {
+      return;
+    }
+
     resetAutocompleteSession();
     
     if (useGoogleApi) {
       try {
         setLoading(true);
+        
+        // Increment count BEFORE API call
+        incrementSearchCount();
+        
         const placeWithReviews = await getPlaceDetailsWithReviews(place.id);
         
         if (placeWithReviews) {
@@ -106,7 +158,22 @@ const SearchPage: React.FC = () => {
             <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 600, mx: 'auto' }}>
               Search for any place and get AI-powered summaries of Google reviews in your preferred language
             </Typography>
+            {useGoogleApi && (
+              <Chip 
+                label={`${getRemainingSearches()} searches remaining today`}
+                color={getRemainingSearches() <= 3 ? 'warning' : 'success'}
+                size="small"
+                sx={{ mt: 1 }}
+              />
+            )}
           </Box>
+        )}
+
+        {/* Rate Limit Error */}
+        {rateLimitError && (
+          <Alert severity="warning" onClose={() => setRateLimitError(null)} sx={{ mb: 2 }}>
+            {rateLimitError}
+          </Alert>
         )}
 
         {/* Search Section */}
@@ -155,6 +222,10 @@ const SearchPage: React.FC = () => {
               },
               '& input': {
                 backgroundColor: 'white !important',
+                '&:-webkit-autofill': {
+                  WebkitBoxShadow: '0 0 0 100px white inset !important',
+                  WebkitTextFillColor: 'default !important',
+                },
               }
             }}
           />
