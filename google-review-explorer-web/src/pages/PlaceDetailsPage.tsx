@@ -175,11 +175,16 @@ const PlaceDetailsPage: React.FC = () => {
           <Typography variant="body1" color="text.secondary" paragraph>
             {place.address}
           </Typography>
-          <Chip 
-            label={place.type.replace('_', ' ').toUpperCase()} 
-            color="primary" 
-            variant="outlined"
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Chip 
+              label={place.type.replace('_', ' ').toUpperCase()} 
+              color="primary" 
+              variant="outlined"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              Data from Google Places API
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
 

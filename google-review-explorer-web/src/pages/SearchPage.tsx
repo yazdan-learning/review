@@ -35,7 +35,7 @@ const SearchPage: React.FC = () => {
     { query: 'hotel', icon: '🏨', description: 'Search for hotels' },
   ];
 
-  // Rate limiting: Check daily usage
+  // Rate limiting: Check daily usage (ALWAYS enforced - strictly necessary)
   const checkRateLimit = (): boolean => {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const storedDate = localStorage.getItem('searchDate');
@@ -57,7 +57,7 @@ const SearchPage: React.FC = () => {
     return true;
   };
 
-  // Increment search count
+  // Increment search count (ALWAYS - strictly necessary for rate limiting)
   const incrementSearchCount = () => {
     const count = parseInt(localStorage.getItem('searchCount') || '0');
     localStorage.setItem('searchCount', (count + 1).toString());

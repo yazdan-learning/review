@@ -1,10 +1,15 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Box } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import SearchPage from './pages/SearchPage';
 import PlaceDetailsPage from './pages/PlaceDetailsPage';
 import ChatPage from './pages/ChatPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
+import CookieConsent from './components/CookieConsent';
+import Footer from './components/Footer';
 
 const theme = createTheme({
   palette: {
@@ -28,11 +33,19 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <Routes>
-          <Route path="/" element={<SearchPage />} />
-          <Route path="/place-details" element={<PlaceDetailsPage />} />
-          <Route path="/chat" element={<ChatPage />} />
-        </Routes>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Box sx={{ flex: 1 }}>
+            <Routes>
+              <Route path="/" element={<SearchPage />} />
+              <Route path="/place-details" element={<PlaceDetailsPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms" element={<TermsOfServicePage />} />
+            </Routes>
+          </Box>
+          <Footer />
+          <CookieConsent />
+        </Box>
       </Router>
     </ThemeProvider>
   );
