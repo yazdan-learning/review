@@ -211,6 +211,82 @@ export const getPlaceDetailsWithReviews = async (placeId: string): Promise<Place
   }
 };
 
+/**
+ * 🎯 NEW: Get place details WITH AI-POWERED REVIEW SUMMARY from Google Gemini
+ * This uses Google's native reviewSummary feature (100% compliant with ToS)
+ * 
+ * IMPORTANT: Review summaries are only available in specific regions:
+ * - US, UK, Japan, Brazil, and select Latin American countries
+ * - English, Spanish, Portuguese, and Japanese languages
+ * - NOT guaranteed for all places (popular places only)
+ * 
+ * Source: https://developers.google.com/maps/documentation/places/web-service/review-summaries
+ * 
+ * @param placeId - The place ID from autocomplete
+ * @returns Place with AI-generated review summary from Google (if available)
+ */
+export const getPlaceDetailsWithAISummary = async (placeId: string): Promise<Place | null> => {
+  try {
+    // According to Google docs, we need to use the standard Place Details endpoint
+    // with reviewSummary in the field mask
+    const response = await fetch(`${BASE_URL}/places/${placeId}`, {
+      method: 'GET',
+      headers: {
+        'X-Goog-Api-Key': API_KEY,
+        'Content-Type': 'application/json',
+        // ⚠️ IMPORTANT: Field mask syntax from Google documentation
+        // Must include basic fields + reviewSummary
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,types,rating,priceLevel,location,userRatingCount,reviewSummary',
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Google Places API Error:', response.status, errorText);
+      throw new Error(`Place Details API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Log response to debug (remove after testing)
+    console.log('📍 Place Details Response:', {
+      placeId,
+      hasReviewSummary: !!data.reviewSummary,
+      reviewSummary: data.reviewSummary,
+      location: data.location
+    });
+    
+    // Convert to Place format
+    const place = convertGooglePlaceToPlace(data);
+    
+    // Add Google's AI review summary if available
+    // Structure according to Google documentation:
+    // reviewSummary.text.text = summary text
+    // reviewSummary.text.languageCode = language
+    // reviewSummary.disclosureText.text = "Summarized with Gemini"
+    // reviewSummary.reviewsUri = link to all reviews
+    // reviewSummary.flagContentUri = report content link
+    if (data.reviewSummary) {
+      place.googleReviewSummary = {
+        text: data.reviewSummary.text?.text || '',
+        languageCode: data.reviewSummary.text?.languageCode || 'en',
+        disclosureText: data.reviewSummary.disclosureText?.text || 'Summarized with Gemini',
+        reviewsUri: data.reviewSummary.reviewsUri || '',
+        flagContentUri: data.reviewSummary.flagContentUri || '',
+      };
+      
+      console.log('✅ Google AI Summary Found:', place.googleReviewSummary.text.substring(0, 100) + '...');
+    } else {
+      console.log('⚠️ No Review Summary available for this place (this is normal for many places)');
+    }
+    
+    return place;
+  } catch (error) {
+    console.error('❌ Error fetching place with AI summary:', error);
+    throw error;
+  }
+};
+
 export const isApiKeyConfigured = (): boolean => {
   return API_KEY !== 'YOUR_API_KEY_HERE' && API_KEY.length > 0;
 };
@@ -222,8 +298,13 @@ export const isApiKeyConfigured = (): boolean => {
 // n8n webhook URL from environment variables
 const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/review';
 
+// 🔒 SECURITY: Secret token for n8n webhook authentication
+// This prevents anyone from spamming your webhook and triggering AI processing
+const N8N_SECRET = process.env.REACT_APP_N8N_SECRET || '';
+
 /**
  * Send reviews to n8n for AI summarization with language support
+ * 🔒 SECURITY: Protected with Bearer token authentication
  * @param place - Place object with details
  * @param reviews - Array of reviews to summarize
  * @param language - Language code for AI summary (default: 'en')
@@ -234,6 +315,8 @@ export const getAISummaryFromN8n = async (place: Place, reviews: Review[], langu
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // 🔒 Add authentication header to prevent webhook spam
+        'Authorization': `Bearer ${N8N_SECRET}`,
       },
       body: JSON.stringify({ 
         placeId: place.id,

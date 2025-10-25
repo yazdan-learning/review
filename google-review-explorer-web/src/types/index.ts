@@ -13,6 +13,16 @@ export interface Place {
   isOpen: boolean;
   reviews?: Review[];
   userRatingCount?: number; // Total number of reviews on Google
+  googleReviewSummary?: GoogleReviewSummary; // AI-powered summary from Google
+}
+
+// Google's native AI review summary (from reviewSummary field)
+export interface GoogleReviewSummary {
+  text: string; // The AI-generated summary text
+  languageCode: string; // Language of the summary
+  disclosureText: string; // "Summarized with Gemini" (MANDATORY to display)
+  reviewsUri: string; // Link to full reviews on Google Maps (MANDATORY)
+  flagContentUri: string; // Link to report inappropriate content (MANDATORY)
 }
 
 export interface Review {

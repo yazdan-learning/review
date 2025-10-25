@@ -17,7 +17,9 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import { Place } from '../types';
 import { mockSearchResults } from '../services/mockData';
-import { searchPlaces, isApiKeyConfigured, resetAutocompleteSession, getPlaceDetailsWithReviews } from '../services/googlePlacesApi';
+import { searchPlaces, isApiKeyConfigured, resetAutocompleteSession, getPlaceDetailsWithAISummary } from '../services/googlePlacesApi';
+// 🔧 TO SWITCH BACK TO GROQ: Uncomment the line below
+// import { getPlaceDetailsWithReviews } from '../services/googlePlacesApi';
 
 const SearchPage: React.FC = () => {
   const navigate = useNavigate();
@@ -125,14 +127,20 @@ const SearchPage: React.FC = () => {
     if (useGoogleApi) {
       try {
         setLoading(true);
-        
-        // Increment count BEFORE API call
         incrementSearchCount();
         
-        const placeWithReviews = await getPlaceDetailsWithReviews(place.id);
+        // 🔧 CURRENT: Using Google's native AI summary (100% legal)
+        const placeWithData = await getPlaceDetailsWithAISummary(place.id);
         
-        if (placeWithReviews) {
-          navigate('/place-details', { state: { place: placeWithReviews } });
+        // 🔧 TO SWITCH BACK TO GROQ: Comment the line above and uncomment below
+        // const placeWithData = await getPlaceDetailsWithReviews(place.id);
+        
+        if (placeWithData) {
+          navigate('/place-details', { 
+            state: { 
+              place: placeWithData
+            } 
+          });
         } else {
           navigate('/place-details', { state: { place } });
         }

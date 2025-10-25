@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -9,7 +9,6 @@ import {
   Chip,
   Box,
   Divider,
-  CircularProgress,
   Alert,
   FormControl,
   InputLabel,
@@ -18,24 +17,9 @@ import {
 } from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
 import TranslateIcon from '@mui/icons-material/Translate';
-import { Place, ReviewSummary } from '../types';
-import { getAISummaryFromN8n } from '../services/googlePlacesApi';
+import { Place } from '../types';
 
-// Helper function to parse AI text into structured summary
-const parseAISummaryText = (text: string, place: Place): ReviewSummary => {
-  // The AI text is a paragraph summary from n8n
-  return {
-    overall_rating: place.rating || 4.0,
-    total_reviews: place.reviews?.length || 0,
-    sentiment_summary: text.trim(),
-    pros: [],
-    cons: [],
-    key_themes: [],
-    recommendation: ""
-  };
-};
-
-// Available languages for AI summary
+// Available languages for display
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇬🇧' },
   { code: 'es', name: 'Spanish', flag: '🇪🇸' },
@@ -65,55 +49,15 @@ const PlaceDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const { place: initialPlace } = location.state as { place: Place };
   const [place] = useState<Place>(initialPlace);
-  const [summary, setSummary] = useState<ReviewSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // 🔧 Language selector state - ready for Groq
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
 
-  // Send reviews to n8n for AI summarization when language changes
-  useEffect(() => {
-    const loadAISummary = async () => {
-      try {
-        setLoading(true);
-        
-        // If place has reviews, send to n8n for AI summarization
-        if (place.reviews && place.reviews.length > 0) {
-          const data = await getAISummaryFromN8n(place, place.reviews, selectedLanguage);
+  // Check if Google's AI summary is available
+  const hasGoogleAISummary = place.googleReviewSummary && place.googleReviewSummary.text;
+  
+  // 🔧 NOTE: When using Google AI, language is auto-determined
+  // To enable language selection, switch back to Groq (see comments in code)
 
-          // Only update summary if we got valid data from n8n
-          if (data && data.length > 0 && data[0].output && data[0].output.text) {
-            // Clean up the text - remove markdown and extra formatting
-            let cleanText = data[0].output.text;
-            
-            // Remove markdown bold (**text**)
-            cleanText = cleanText.replace(/\*\*([^*]+)\*\*/g, '$1');
-            
-            // Remove markdown italic (*text*)
-            cleanText = cleanText.replace(/\*([^*]+)\*/g, '$1');
-            
-            // Remove extra newlines
-            cleanText = cleanText.replace(/\n\n+/g, '\n\n');
-            
-            // Parse the cleaned text into our summary format
-            const summaryData = parseAISummaryText(cleanText, place);
-            setSummary(summaryData);
-            setError(null); // Clear any errors
-          } else {
-            setError('AI service returned invalid data. Please try again later.');
-          }
-        } else {
-          setError('No reviews available for this place.');
-        }
-      } catch (err) {
-        setError('AI service is currently unavailable. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAISummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [place.id, selectedLanguage]); // Re-run when language changes
 
   const renderStars = (rating: number) => {
     return '★'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
@@ -122,21 +66,6 @@ const PlaceDetailsPage: React.FC = () => {
   const renderPriceLevel = (level: number) => {
     return '$'.repeat(level);
   };
-
-  // Show loading state
-  if (loading && !error) {
-    return (
-      <Container maxWidth="md" sx={{ mt: 4, mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <CircularProgress size={60} />
-        <Typography variant="h6" color="text.secondary">
-          Generating AI Summary...
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Analyzing {place.reviews?.length || 0} reviews
-        </Typography>
-      </Container>
-    );
-  }
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
@@ -147,13 +76,6 @@ const PlaceDetailsPage: React.FC = () => {
       >
         ← Back to Search
       </Button>
-
-      {/* Show error if n8n is not available */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
 
       {/* 1. Place Info Card */}
       <Card sx={{ mb: 3 }}>
@@ -188,65 +110,139 @@ const PlaceDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 2. AI Review Summary - Only show if successfully loaded */}
-      {summary && !error ? (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-              <Box>
-                <Typography variant="h5" gutterBottom fontWeight="bold">
+      {/* AI Review Summary Section */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          {hasGoogleAISummary && place.googleReviewSummary ? (
+            // Google AI Summary Available
+            <>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h5" fontWeight="bold" gutterBottom>
                   AI Review Summary
                 </Typography>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : summary.total_reviews} reviews
+                  Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : 'customer'} reviews
                 </Typography>
               </Box>
               
-              {/* Language Selector */}
-              <FormControl size="small" sx={{ minWidth: 180 }}>
-                <InputLabel id="language-select-label">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <TranslateIcon fontSize="small" />
-                    Language
-                  </Box>
-                </InputLabel>
-                <Select
-                  labelId="language-select-label"
-                  id="language-select"
-                  value={selectedLanguage}
-                  label="Language"
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
-                  disabled={loading}
+              {/* 🔧 COMMENTED OUT: Language Selector (for future use with Groq)
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+                <Box>
+                  <Typography variant="h5" fontWeight="bold" gutterBottom>
+                    AI Review Summary
+                  </Typography>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : 'customer'} reviews
+                  </Typography>
+                </Box>
+                
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel id="language-select-label">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <TranslateIcon fontSize="small" />
+                      Language
+                    </Box>
+                  </InputLabel>
+                  <Select
+                    labelId="language-select-label"
+                    id="language-select"
+                    value={selectedLanguage}
+                    label="Language"
+                    onChange={(e) => setSelectedLanguage(e.target.value)}
+                  >
+                    {AVAILABLE_LANGUAGES.map((lang) => (
+                      <MenuItem key={lang.code} value={lang.code}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <span style={{ fontSize: '1.2em' }}>{lang.flag}</span>
+                          <span>{lang.name}</span>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+              */}
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
+                <Typography variant="h3" sx={{ color: '#00b894' }}>
+                  {place.rating}/5
+                </Typography>
+                <Typography variant="h5" sx={{ color: '#FFD700' }}>
+                  {renderStars(place.rating)}
+                </Typography>
+              </Box>
+              
+              {/* AI-generated summary text */}
+              <Typography variant="body1" paragraph sx={{ whiteSpace: 'pre-line' }}>
+                {place.googleReviewSummary.text}
+              </Typography>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              {/* ⚠️ MANDATORY: Google Attribution */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  {place.googleReviewSummary.disclosureText}
+                </Typography>
+                
+                {/* ⚠️ MANDATORY: Link to full reviews */}
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    href={place.googleReviewSummary.reviewsUri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View All Reviews on Google Maps
+                  </Button>
+                  
+                  {/* ⚠️ MANDATORY: Report inappropriate content */}
+                  <Button 
+                    variant="text" 
+                    size="small"
+                    href={place.googleReviewSummary.flagContentUri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    color="error"
+                  >
+                    Report Inappropriate Content
+                  </Button>
+                </Box>
+              </Box>
+            </>
+          ) : (
+            // Summary Not Available
+            <>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h5" fontWeight="bold" gutterBottom>
+                  AI Review Summary
+                </Typography>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Based on {place.userRatingCount ? place.userRatingCount.toLocaleString() : 'customer'} reviews
+                </Typography>
+              </Box>
+              
+              <Alert severity="info">
+                AI summary is not available for this location. This feature is currently supported only in the United States, United Kingdom, Japan, Brazil, India, and select Latin American countries.
+              </Alert>
+              
+              <Box sx={{ mt: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  href={`https://www.google.com/maps/place/?q=place_id:${place.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  {AVAILABLE_LANGUAGES.map((lang) => (
-                    <MenuItem key={lang.code} value={lang.code}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <span style={{ fontSize: '1.2em' }}>{lang.flag}</span>
-                        <span>{lang.name}</span>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
-              <Typography variant="h3" sx={{ color: '#00b894' }}>
-                {summary.overall_rating}/5
-              </Typography>
-              <Typography variant="h5" sx={{ color: '#FFD700' }}>
-                {renderStars(summary.overall_rating)}
-              </Typography>
-            </Box>
-            
-            <Typography variant="body1" paragraph>
-              {summary.sentiment_summary}
-            </Typography>
-            
-            <Divider sx={{ my: 2 }} />
-          </CardContent>
-        </Card>
-      ) : null}
+                  View All Reviews on Google Maps
+                </Button>
+              </Box>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
 
       {/* 3. Chat Bot Button */}
       <Button
